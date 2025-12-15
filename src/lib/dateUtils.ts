@@ -37,20 +37,29 @@ export function parseExcelDate(value: unknown): string | null {
 }
 
 function excelSerialToDate(serial: number): Date {
-  const utcDays = Math.floor(serial - 25569);
-  const utcValue = utcDays * 86400 * 1000;
-  return new Date(utcValue);
+  let adjustedSerial = serial;
+  if (serial > 60) {
+    adjustedSerial = serial - 1;
+  }
+  const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const utcMs = excelEpoch.getTime() + adjustedSerial * msPerDay;
+  return new Date(utcMs);
 }
 
 function formatDateToYYYYMMDD(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 export function getTodayDateString(): string {
-  return formatDateToYYYYMMDD(new Date());
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function formatDateForDisplay(dateStr: string): string {
