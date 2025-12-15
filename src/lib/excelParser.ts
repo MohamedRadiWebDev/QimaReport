@@ -3,6 +3,24 @@ import { parseExcelDate } from './dateUtils';
 import { parseNumber } from './numberUtils';
 import { ExpenseRow, LoanRow, CustodyRow, ReportData, ValidationError } from './types';
 
+// Helper function to normalize column names for matching
+function normalizeColumnName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Helper function to find column value by flexible matching
+function getColumnValue(row: Record<string, unknown>, targetColumn: string): unknown {
+  const normalizedTarget = normalizeColumnName(targetColumn);
+  
+  for (const [key, value] of Object.entries(row)) {
+    if (normalizeColumnName(key) === normalizedTarget) {
+      return value;
+    }
+  }
+  
+  return undefined;
+}
+
 const SHEET_NAMES = {
   expenses: 'الخزينه',
   loans: 'خزينه السلف',
@@ -148,7 +166,10 @@ function parseExpenseSheet(
     
     if (tempData.length > 0) {
       const tempHeaders = Object.keys(tempData[0] || {});
-      const tempMissing = EXPENSE_COLUMNS.filter(col => !tempHeaders.some(h => h.trim() === col.trim()));
+      const normalizedHeaders = tempHeaders.map(h => normalizeColumnName(h));
+      const tempMissing = EXPENSE_COLUMNS.filter(col => 
+        !normalizedHeaders.includes(normalizeColumnName(col))
+      );
       
       if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
         jsonData = tempData;
@@ -162,19 +183,19 @@ function parseExpenseSheet(
 
   const rows: ExpenseRow[] = [];
   for (const row of jsonData) {
-    const dateValue = parseExcelDate(row['التاريخ']);
+    const dateValue = parseExcelDate(getColumnValue(row, 'التاريخ'));
     if (dateValue === targetDate) {
       rows.push({
         التاريخ: dateValue,
-        البيان: String(row['البيان'] || ''),
-        'اسم الشركه المنصرف لها': String(row['اسم الشركه المنصرف لها'] || ''),
-        'اسم الموظف المنصرف له': String(row['اسم الموظف المنصرف له'] || ''),
-        القسم: String(row['القسم'] || ''),
-        الفرع: String(row['الفرع'] || ''),
-        'نوع المصروف': String(row['نوع المصروف'] || ''),
-        'رقم الفاتورة': String(row['رقم الفاتورة'] || ''),
-        المنصرف: parseNumber(row['المنصرف']),
-        ملاحظات: String(row['ملاحظات'] || ''),
+        البيان: String(getColumnValue(row, 'البيان') || ''),
+        'اسم الشركه المنصرف لها': String(getColumnValue(row, 'اسم الشركه المنصرف لها') || ''),
+        'اسم الموظف المنصرف له': String(getColumnValue(row, 'اسم الموظف المنصرف له') || ''),
+        القسم: String(getColumnValue(row, 'القسم') || ''),
+        الفرع: String(getColumnValue(row, 'الفرع') || ''),
+        'نوع المصروف': String(getColumnValue(row, 'نوع المصروف') || ''),
+        'رقم الفاتورة': String(getColumnValue(row, 'رقم الفاتورة') || ''),
+        المنصرف: parseNumber(getColumnValue(row, 'المنصرف')),
+        ملاحظات: String(getColumnValue(row, 'ملاحظات') || ''),
       });
     }
   }
@@ -203,7 +224,10 @@ function parseLoanSheet(
     
     if (tempData.length > 0) {
       const tempHeaders = Object.keys(tempData[0] || {});
-      const tempMissing = LOAN_COLUMNS.filter(col => !tempHeaders.some(h => h.trim() === col.trim()));
+      const normalizedHeaders = tempHeaders.map(h => normalizeColumnName(h));
+      const tempMissing = LOAN_COLUMNS.filter(col => 
+        !normalizedHeaders.includes(normalizeColumnName(col))
+      );
       
       if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
         jsonData = tempData;
@@ -217,18 +241,18 @@ function parseLoanSheet(
 
   const rows: LoanRow[] = [];
   for (const row of jsonData) {
-    const dateValue = parseExcelDate(row['التاريخ']);
+    const dateValue = parseExcelDate(getColumnValue(row, 'التاريخ'));
     if (dateValue === targetDate) {
       rows.push({
         التاريخ: dateValue,
-        'اسم الموظف': String(row['اسم الموظف'] || ''),
-        الكود: String(row['الكود'] || ''),
-        القسم: String(row['القسم'] || ''),
-        الفرع: String(row['الفرع'] || ''),
-        'سلفه / سداد': String(row['سلفه / سداد'] || ''),
-        السلفه: parseNumber(row['السلفه']),
-        'طريق السداد': String(row['طريق السداد'] || ''),
-        ملاحظات: String(row['ملاحظات'] || ''),
+        'اسم الموظف': String(getColumnValue(row, 'اسم الموظف') || ''),
+        الكود: String(getColumnValue(row, 'الكود') || ''),
+        القسم: String(getColumnValue(row, 'القسم') || ''),
+        الفرع: String(getColumnValue(row, 'الفرع') || ''),
+        'سلفه / سداد': String(getColumnValue(row, 'سلفه / سداد') || ''),
+        السلفه: parseNumber(getColumnValue(row, 'السلفه')),
+        'طريق السداد': String(getColumnValue(row, 'طريق السداد') || ''),
+        ملاحظات: String(getColumnValue(row, 'ملاحظات') || ''),
       });
     }
   }
@@ -257,7 +281,10 @@ function parseCustodySheet(
     
     if (tempData.length > 0) {
       const tempHeaders = Object.keys(tempData[0] || {});
-      const tempMissing = CUSTODY_COLUMNS.filter(col => !tempHeaders.some(h => h.trim() === col.trim()));
+      const normalizedHeaders = tempHeaders.map(h => normalizeColumnName(h));
+      const tempMissing = CUSTODY_COLUMNS.filter(col => 
+        !normalizedHeaders.includes(normalizeColumnName(col))
+      );
       
       if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
         jsonData = tempData;
@@ -271,20 +298,20 @@ function parseCustodySheet(
 
   const rows: CustodyRow[] = [];
   for (const row of jsonData) {
-    const dateValue = parseExcelDate(row['التاريخ']);
+    const dateValue = parseExcelDate(getColumnValue(row, 'التاريخ'));
     if (dateValue === targetDate) {
       rows.push({
         التاريخ: dateValue,
-        البيان: String(row['البيان'] || ''),
-        'المنصرف اليه': String(row['المنصرف اليه'] || ''),
-        القسم: String(row['القسم'] || ''),
-        التصنيف: String(row['التصنيف'] || ''),
-        'نوع المصروف': String(row['نوع المصروف'] || ''),
-        'رقم الفاتورة / كود موظف': String(row['رقم الفاتورة / كود موظف'] || ''),
-        'رقم إيصال الصرف/ استلام': String(row['رقم إيصال الصرف/ استلام'] || ''),
-        'العهدة / سداد': String(row['العهدة / سداد'] || ''),
-        العهدة: parseNumber(row['العهدة']),
-        ملاحظات: String(row['ملاحظات'] || ''),
+        البيان: String(getColumnValue(row, 'البيان') || ''),
+        'المنصرف اليه': String(getColumnValue(row, 'المنصرف اليه') || ''),
+        القسم: String(getColumnValue(row, 'القسم') || ''),
+        التصنيف: String(getColumnValue(row, 'التصنيف') || ''),
+        'نوع المصروف': String(getColumnValue(row, 'نوع المصروف') || ''),
+        'رقم الفاتورة / كود موظف': String(getColumnValue(row, 'رقم الفاتورة / كود موظف') || ''),
+        'رقم إيصال الصرف/ استلام': String(getColumnValue(row, 'رقم إيصال الصرف/ استلام') || ''),
+        'العهدة / سداد': String(getColumnValue(row, 'العهدة / سداد') || ''),
+        العهدة: parseNumber(getColumnValue(row, 'العهدة')),
+        ملاحظات: String(getColumnValue(row, 'ملاحظات') || ''),
       });
     }
   }
