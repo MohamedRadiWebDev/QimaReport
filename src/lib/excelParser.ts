@@ -134,14 +134,31 @@ function parseExpenseSheet(
 ): { rows: ExpenseRow[]; missingColumns: string[] } {
   const actualSheetName = workbook.SheetNames.find(name => name.trim() === sheetName.trim()) || sheetName;
   const sheet = workbook.Sheets[actualSheetName];
-  const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   
-  if (jsonData.length === 0) {
-    return { rows: [], missingColumns: [] };
+  // Try reading from different starting rows to find the headers
+  let jsonData: Record<string, unknown>[] = [];
+  let headers: string[] = [];
+  let missingColumns: string[] = [];
+  
+  for (let startRow = 0; startRow <= 3; startRow++) {
+    const tempData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { 
+      defval: '',
+      range: startRow
+    });
+    
+    if (tempData.length > 0) {
+      const tempHeaders = Object.keys(tempData[0] || {});
+      const tempMissing = EXPENSE_COLUMNS.filter(col => !tempHeaders.some(h => h.trim() === col.trim()));
+      
+      if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
+        jsonData = tempData;
+        headers = tempHeaders;
+        missingColumns = tempMissing;
+        
+        if (missingColumns.length === 0) break;
+      }
+    }
   }
-
-  const headers = Object.keys(jsonData[0] || {});
-  const missingColumns = EXPENSE_COLUMNS.filter(col => !headers.some(h => h.trim() === col.trim()));
 
   const rows: ExpenseRow[] = [];
   for (const row of jsonData) {
@@ -172,14 +189,31 @@ function parseLoanSheet(
 ): { rows: LoanRow[]; missingColumns: string[] } {
   const actualSheetName = workbook.SheetNames.find(name => name.trim() === sheetName.trim()) || sheetName;
   const sheet = workbook.Sheets[actualSheetName];
-  const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   
-  if (jsonData.length === 0) {
-    return { rows: [], missingColumns: [] };
+  // Try reading from different starting rows to find the headers
+  let jsonData: Record<string, unknown>[] = [];
+  let headers: string[] = [];
+  let missingColumns: string[] = [];
+  
+  for (let startRow = 0; startRow <= 3; startRow++) {
+    const tempData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { 
+      defval: '',
+      range: startRow
+    });
+    
+    if (tempData.length > 0) {
+      const tempHeaders = Object.keys(tempData[0] || {});
+      const tempMissing = LOAN_COLUMNS.filter(col => !tempHeaders.some(h => h.trim() === col.trim()));
+      
+      if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
+        jsonData = tempData;
+        headers = tempHeaders;
+        missingColumns = tempMissing;
+        
+        if (missingColumns.length === 0) break;
+      }
+    }
   }
-
-  const headers = Object.keys(jsonData[0] || {});
-  const missingColumns = LOAN_COLUMNS.filter(col => !headers.some(h => h.trim() === col.trim()));
 
   const rows: LoanRow[] = [];
   for (const row of jsonData) {
@@ -209,14 +243,31 @@ function parseCustodySheet(
 ): { rows: CustodyRow[]; missingColumns: string[] } {
   const actualSheetName = workbook.SheetNames.find(name => name.trim() === sheetName.trim()) || sheetName;
   const sheet = workbook.Sheets[actualSheetName];
-  const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   
-  if (jsonData.length === 0) {
-    return { rows: [], missingColumns: [] };
+  // Try reading from different starting rows to find the headers
+  let jsonData: Record<string, unknown>[] = [];
+  let headers: string[] = [];
+  let missingColumns: string[] = [];
+  
+  for (let startRow = 0; startRow <= 3; startRow++) {
+    const tempData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { 
+      defval: '',
+      range: startRow
+    });
+    
+    if (tempData.length > 0) {
+      const tempHeaders = Object.keys(tempData[0] || {});
+      const tempMissing = CUSTODY_COLUMNS.filter(col => !tempHeaders.some(h => h.trim() === col.trim()));
+      
+      if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
+        jsonData = tempData;
+        headers = tempHeaders;
+        missingColumns = tempMissing;
+        
+        if (missingColumns.length === 0) break;
+      }
+    }
   }
-
-  const headers = Object.keys(jsonData[0] || {});
-  const missingColumns = CUSTODY_COLUMNS.filter(col => !headers.some(h => h.trim() === col.trim()));
 
   const rows: CustodyRow[] = [];
   for (const row of jsonData) {
