@@ -43,8 +43,11 @@ export function parseExcelFile(
   }
 
   const missingSheets: string[] = [];
+  const normalizedSheetNames = workbook.SheetNames.map(name => name.trim());
+  
   for (const sheetName of Object.values(SHEET_NAMES)) {
-    if (!workbook.SheetNames.includes(sheetName)) {
+    const normalizedTargetName = sheetName.trim();
+    if (!normalizedSheetNames.some(name => name === normalizedTargetName)) {
       missingSheets.push(sheetName);
     }
   }
@@ -129,7 +132,8 @@ function parseExpenseSheet(
   sheetName: string,
   targetDate: string
 ): { rows: ExpenseRow[]; missingColumns: string[] } {
-  const sheet = workbook.Sheets[sheetName];
+  const actualSheetName = workbook.SheetNames.find(name => name.trim() === sheetName.trim()) || sheetName;
+  const sheet = workbook.Sheets[actualSheetName];
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   
   if (jsonData.length === 0) {
@@ -166,7 +170,8 @@ function parseLoanSheet(
   sheetName: string,
   targetDate: string
 ): { rows: LoanRow[]; missingColumns: string[] } {
-  const sheet = workbook.Sheets[sheetName];
+  const actualSheetName = workbook.SheetNames.find(name => name.trim() === sheetName.trim()) || sheetName;
+  const sheet = workbook.Sheets[actualSheetName];
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   
   if (jsonData.length === 0) {
@@ -202,7 +207,8 @@ function parseCustodySheet(
   sheetName: string,
   targetDate: string
 ): { rows: CustodyRow[]; missingColumns: string[] } {
-  const sheet = workbook.Sheets[sheetName];
+  const actualSheetName = workbook.SheetNames.find(name => name.trim() === sheetName.trim()) || sheetName;
+  const sheet = workbook.Sheets[actualSheetName];
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   
   if (jsonData.length === 0) {
