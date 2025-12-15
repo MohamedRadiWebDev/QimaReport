@@ -1,0 +1,262 @@
+Build a Next.js (App Router) TypeScript web app that lets me upload my real Excel file (multi-sheet). The app must extract only the rows for today’s date and generate a clean Arabic daily report ready to send.
+
+Excel structure (exact)
+
+The Excel file contains these sheets and tables:
+
+1) Sheet: "الخزينه" (Expenses / خزينة المصروفات)
+
+Table name: table 1
+Columns EXACT:
+
+التاريخ
+
+اليوم
+
+الشهر
+
+البيان
+
+اسم الشركه المنصرف لها
+
+رقم الفاتورة
+
+كود موظف
+
+اسم الموظف المنصرف له
+
+القسم
+
+الفرع
+
+نوع المصروف
+
+رقم إيصال الصرف
+
+رقم إيصال استلام
+
+اعتماد
+
+ملاحظات
+
+الوارد
+
+المنصرف
+
+الرصيد
+
+Meaning:
+
+Use المنصرف as the expense amount (number)
+
+Filter by التاريخ
+
+Show details in report using: البيان, اسم الشركه المنصرف لها, اسم الموظف المنصرف له, القسم, الفرع, نوع المصروف, رقم الفاتورة, المنصرف, ملاحظات
+
+2) Sheet: "خزينه السلف" (Loans / Employee advances)
+
+Table name: table 4
+Columns EXACT:
+
+التاريخ
+
+الشهر
+
+الكود
+
+اسم الموظف
+
+القسم
+
+الفرع
+
+سلفه / سداد
+
+السلفه
+
+طريق السداد
+
+ملاحظات
+
+Meaning:
+
+Filter by التاريخ
+
+Use السلفه as the amount
+
+“سلفه / سداد” defines the transaction type:
+
+If value contains "سلفه" => it is money out
+
+If value contains "سداد" => it is money in (repayment)
+
+For the daily “outgoing” total, calculate:
+
+total_solf_out = sum(السلفه where سلفه/سداد == سلفه)
+
+total_solf_in = sum(السلفه where سلفه/سداد == سداد) (optional display)
+
+Show details: اسم الموظف, الكود, القسم, الفرع, سلفه/سداد, السلفه, طريق السداد, ملاحظات
+
+3) Sheet: "العهد" (Custody/Advances)
+
+Table name: table 47
+Columns EXACT:
+
+التاريخ
+
+الشهر
+
+البيان
+
+المنصرف اليه
+
+رقم الفاتورة / كود موظف
+
+القسم
+
+التصنيف
+
+نوع المصروف
+
+رقم إيصال الصرف/ استلام
+
+العهدة / سداد
+
+العهدة
+
+ملاحظات
+
+Meaning:
+
+Filter by التاريخ
+
+Use العهدة as the amount
+
+“العهدة / سداد” defines the transaction type:
+
+If contains "عهدة" => money out
+
+If contains "سداد" => money in (settlement)
+
+Outgoing total:
+
+total_ohda_out = sum(العهدة where العهدة/سداد == عهدة)
+
+total_ohda_in = sum(العهدة where العهدة/سداد == سداد) (optional)
+
+Show details: البيان, المنصرف اليه, القسم, التصنيف, نوع المصروف, رقم الفاتورة/كود موظف, رقم إيصال الصرف/استلام, العهدة/سداد, العهدة, ملاحظات
+
+Core app requirements
+
+Page / with:
+
+Upload input for .xlsx
+
+Button “تجهيز تقرير اليوم”
+
+Optional date picker (default = today) so I can generate report for any date
+
+Parsing & normalization
+
+Use xlsx (SheetJS).
+
+Read those three sheets by name exactly: "الخزينه", "خزينه السلف", "العهد"
+
+Parse dates in column التاريخ robustly:
+
+Excel serial numbers OR text
+
+Accept formats like DD/MM/YYYY and YYYY-MM-DD
+
+Normalize dates to YYYY-MM-DD and compare against selected date (today by default, local timezone)
+
+Calculations
+
+Expenses total:
+
+expenses_total = sum(المنصرف) from sheet "الخزينه" rows matching date
+
+Loans totals:
+
+solf_out = sum(السلفه where سلفه/سداد indicates "سلفه")
+
+solf_in = sum(السلفه where indicates "سداد") (optional)
+
+Custody totals:
+
+ohda_out = sum(العهدة where العهدة/سداد indicates "عهدة")
+
+ohda_in = sum(العهدة where indicates "سداد") (optional)
+
+Total outgoing for the day:
+
+total_out = expenses_total + solf_out + ohda_out
+
+Report UI (Arabic RTL)
+
+Summary cards:
+
+إجمالي مصروفات اليوم
+
+إجمالي العهد (عهدة فقط الخارج)
+
+إجمالي السلف (سلفة فقط الخارج)
+
+إجمالي الخارج اليوم
+
+Optional show totals of “السداد” for سلف/عهد in separate small line
+
+Tables:
+
+مصروفات اليوم (from "الخزينه")
+
+العهد اليوم (from "العهد")
+
+السلف اليوم (from "خزينه السلف")
+
+If any section empty: show “لا توجد بيانات لهذا اليوم”
+
+WhatsApp-ready message + copy button
+Generate Arabic text like:
+
+📅 تقرير يومي – DD/MM/YYYY
+
+💰 مصروفات الخزينة: X
+👛 العهد (الخارج): Y
+🧾 السلف (الخارج): Z
+
+📊 إجمالي الخارج اليوم: TOTAL
+
+
+Add a “نسخ الرسالة” button (Clipboard API).
+
+Errors / validations
+
+If file missing: show Arabic error
+
+If sheet missing: show which one is missing
+
+If columns missing: show the missing column names
+
+Amount values may include commas; convert safely to numbers; ignore invalid
+
+Styling
+
+Use Tailwind
+
+Ensure RTL and good readable tables
+
+Deliverables
+
+Full Next.js code with:
+
+helpers for date parsing (Excel serial + strings)
+
+numeric parsing helper
+
+data extraction functions per sheet
+
+page + components
+
+Provide install commands and run instructions.
