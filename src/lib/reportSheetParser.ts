@@ -358,14 +358,17 @@ function extractReceivables(
     const receivable = parseNumber(row[headerResult.colMap['المستحق']]) ?? 0;
     const toTransfer = parseNumber(row[headerResult.colMap['المطلوب تحويله']]) ?? 0;
     const paid = parseNumber(row[headerResult.colMap['المبلغ المسدد']]) ?? 0;
-    const month = formatMonthCell(row[headerResult.colMap['الشهر']]);
+    const monthInfo = formatMonthCell(row[headerResult.colMap['الشهر']]);
     const customer = String(row[headerResult.colMap['العميل']] ?? '').trim();
     const tax14Index = headerResult.colMap['14%'];
     const tax14 = tax14Index !== undefined ? parseNumber(row[tax14Index]) ?? 0 : 0;
 
     if (receivable > 1) {
       rows.push({
-        month,
+        monthLabel: monthInfo.label,
+        monthKey: monthInfo.key,
+        year: monthInfo.year,
+        monthNumber: monthInfo.monthNumber,
         customer,
         toTransfer,
         paid,
@@ -408,18 +411,40 @@ function extractReceivables(
   };
 }
 
-function formatMonthCell(value: string | number | null): string {
+function formatMonthCell(
+  value: string | number | null
+): { label: string; key: string; year: number | null; monthNumber: number | null } {
   const parsedDate = parseExcelDate(value);
   if (parsedDate) {
-    return parsedDate.toLocaleString('ar-EG', { month: 'long' });
+    const monthNumber = parsedDate.getUTCMonth() + 1;
+    const year = parsedDate.getUTCFullYear();
+    return {
+      label: parsedDate.toLocaleString('ar-EG', { month: 'long' }),
+      key: `${year}-${String(monthNumber).padStart(2, '0')}`,
+      year,
+      monthNumber,
+    };
   }
 
   if (typeof value === 'string') {
     const tryDate = new Date(value);
     if (!isNaN(tryDate.getTime())) {
-      return tryDate.toLocaleString('ar-EG', { month: 'long' });
+      const monthNumber = tryDate.getMonth() + 1;
+      const year = tryDate.getFullYear();
+      return {
+        label: tryDate.toLocaleString('ar-EG', { month: 'long' }),
+        key: `${year}-${String(monthNumber).padStart(2, '0')}`,
+        year,
+        monthNumber,
+      };
     }
   }
 
-  return String(value ?? '').trim();
+  const fallback = String(value ?? '').trim();
+  return {
+    label: fallback || 'غير محدد',
+    key: fallback || 'غير محدد',
+    year: null,
+    monthNumber: null,
+  };
 }
