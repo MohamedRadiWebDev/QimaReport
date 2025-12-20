@@ -500,14 +500,7 @@ function parseReceivableRows(headerResult: {
     }
   }
 
-  if (rows.length > 0) {
-    const sample = rows.slice(0, 3).map((row) => ({
-      month: row.monthLabel,
-      customer: row.customer,
-      receivable: row.receivable,
-    }));
-    console.log('[receivables] parsed sample rows:', sample);
-  } else {
+  if (rows.length === 0) {
     console.log('[receivables] no rows parsed from header row', headerResult.headerRow);
   }
 
