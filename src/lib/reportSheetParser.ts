@@ -327,10 +327,8 @@ function extractReceivables(
   const errors: ValidationError[] = [];
   const headerNames = ['الشهر', 'العميل', 'المطلوب تحويله', 'المبلغ المسدد', 'المستحق', '14%'];
 
-  // The الإيرادات sheet typically has headers on row 3 (index 2). Try there first then fallback.
-  const headerResult =
-    extractTableByHeaders(matrix, headerNames, 2) || extractTableByHeaders(matrix, headerNames);
-  if (!headerResult) {
+  const headerCandidates = findReceivablesHeaderCandidates(matrix, headerNames, [2, 0]);
+  if (headerCandidates.length === 0) {
     errors.push({
       type: 'table',
       message: 'تعذر العثور على جدول الإيرادات والمستحقات',
@@ -349,8 +347,97 @@ function extractReceivables(
     };
   }
 
-  const rows: ReceivableRow[] = [];
+  const parsedCandidates = headerCandidates.map((candidate) => ({
+    header: candidate,
+    rows: parseReceivableRows(candidate),
+  }));
 
+  const best = parsedCandidates.reduce(
+    (acc, curr) => {
+      return curr.rows.length > acc.rows.length ? curr : acc;
+    },
+    parsedCandidates[0]
+  );
+
+  const rows = best.rows;
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.receivablesTotal += row.receivable;
+      acc.toTransferTotal += row.toTransfer;
+      acc.paidTotal += row.paid;
+      acc.tax14Total += row.tax14 ?? 0;
+      return acc;
+    },
+    { receivablesTotal: 0, toTransferTotal: 0, paidTotal: 0, tax14Total: 0 }
+  );
+
+  const customerSummaryList = Object.entries(
+    rows.reduce<Record<string, number>>((acc, row) => {
+      if (!acc[row.customer]) acc[row.customer] = 0;
+      acc[row.customer] += row.receivable;
+      return acc;
+    }, {})
+  )
+    .map(([customer, receivable]) => ({ customer, receivable }))
+    .sort((a, b) => b.receivable - a.receivable);
+
+  return {
+    data: {
+      rows,
+      totals,
+      customerSummary: customerSummaryList,
+      missingHeaders: [],
+      found: true,
+    },
+    errors,
+  };
+}
+
+function findReceivablesHeaderCandidates(
+  matrix: (string | number | null)[][],
+  headerNames: string[],
+  preferredStarts: number[]
+): { headerRow: number; colMap: Record<string, number>; rows: (string | number | null)[][] }[] {
+  const normalizedHeaders = headerNames.map((h) => h.trim());
+  const candidates: {
+    headerRow: number;
+    colMap: Record<string, number>;
+    rows: (string | number | null)[][];
+  }[] = [];
+  const seenRows = new Set<number>();
+
+  for (const startRow of preferredStarts) {
+    for (let r = startRow; r < matrix.length; r++) {
+      if (seenRows.has(r)) continue;
+      const row = matrix[r] || [];
+      const colMap: Record<string, number> = {};
+
+      normalizedHeaders.forEach((header) => {
+        const idx = row.findIndex(
+          (cell) => typeof cell === 'string' && cell.trim() === header
+        );
+        if (idx !== -1) {
+          colMap[header] = idx;
+        }
+      });
+
+      if (Object.keys(colMap).length === normalizedHeaders.length) {
+        candidates.push({ headerRow: r, colMap, rows: matrix.slice(r + 1) });
+        seenRows.add(r);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function parseReceivableRows(headerResult: {
+  headerRow: number;
+  colMap: Record<string, number>;
+  rows: (string | number | null)[][];
+}): ReceivableRow[] {
+  const rows: ReceivableRow[] = [];
   let consecutiveEmptyRows = 0;
 
   for (const row of headerResult.rows) {
@@ -387,37 +474,7 @@ function extractReceivables(
     }
   }
 
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.receivablesTotal += row.receivable;
-      acc.toTransferTotal += row.toTransfer;
-      acc.paidTotal += row.paid;
-      acc.tax14Total += row.tax14 ?? 0;
-      return acc;
-    },
-    { receivablesTotal: 0, toTransferTotal: 0, paidTotal: 0, tax14Total: 0 }
-  );
-
-  const customerSummaryList = Object.entries(
-    rows.reduce<Record<string, number>>((acc, row) => {
-      if (!acc[row.customer]) acc[row.customer] = 0;
-      acc[row.customer] += row.receivable;
-      return acc;
-    }, {})
-  )
-    .map(([customer, receivable]) => ({ customer, receivable }))
-    .sort((a, b) => b.receivable - a.receivable);
-
-  return {
-    data: {
-      rows,
-      totals,
-      customerSummary: customerSummaryList,
-      missingHeaders: [],
-      found: true,
-    },
-    errors,
-  };
+  return rows;
 }
 
 function parseMonthYearString(
