@@ -77,23 +77,30 @@ export function findNearestNumber(
   return nearest;
 }
 
+function normalizeHeaderText(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return normalizeDigits(String(value))
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 export function extractTableByHeaders(
   matrix: (string | number | null)[][],
   headerNames: string[],
   startRow = 0
 ): { headerRow: number; colMap: Record<string, number>; rows: (string | number | null)[][] } | null {
-  const normalizedHeaders = headerNames.map((h) => h.trim());
+  const normalizedHeaders = headerNames.map((h) => normalizeHeaderText(h));
 
   for (let r = startRow; r < matrix.length; r++) {
     const row = matrix[r] || [];
     const colMap: Record<string, number> = {};
 
-    normalizedHeaders.forEach((header) => {
-      const idx = row.findIndex(
-        (cell) => typeof cell === 'string' && cell.trim() === header
-      );
+    normalizedHeaders.forEach((header, headerIdx) => {
+      const idx = row.findIndex((cell) => normalizeHeaderText(cell) === header);
       if (idx !== -1) {
-        colMap[header] = idx;
+        colMap[headerNames[headerIdx]] = idx;
       }
     });
 
@@ -407,7 +414,7 @@ function findReceivablesHeaderCandidates(
   headerNames: string[],
   preferredStarts: number[]
 ): { headerRow: number; colMap: Record<string, number>; rows: (string | number | null)[][] }[] {
-  const normalizedHeaders = headerNames.map((h) => h.trim());
+  const normalizedHeaders = headerNames.map((h) => normalizeHeaderText(h));
   const candidates: {
     headerRow: number;
     colMap: Record<string, number>;
@@ -421,12 +428,10 @@ function findReceivablesHeaderCandidates(
       const row = matrix[r] || [];
       const colMap: Record<string, number> = {};
 
-      normalizedHeaders.forEach((header) => {
-        const idx = row.findIndex(
-          (cell) => typeof cell === 'string' && cell.trim() === header
-        );
+      normalizedHeaders.forEach((header, headerIdx) => {
+        const idx = row.findIndex((cell) => normalizeHeaderText(cell) === header);
         if (idx !== -1) {
-          colMap[header] = idx;
+          colMap[headerNames[headerIdx]] = idx;
         }
       });
 
