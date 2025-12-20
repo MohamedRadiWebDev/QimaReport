@@ -1,7 +1,15 @@
 import * as XLSX from 'xlsx';
-import { parseExcelDate } from './dateUtils';
+import { formatDateToYYYYMMDD, parseExcelDate } from './dateUtils';
 import { parseNumber } from './numberUtils';
-import { ExpenseRow, LoanRow, CustodyRow, ReportData, ValidationError } from './types';
+import {
+  ExpenseRow,
+  LoanRow,
+  CustodyRow,
+  ReportData,
+  ValidationError,
+  DailyReportData,
+} from './types';
+import { parseReportSheet } from './reportSheetParser';
 
 // Helper function to normalize column names for matching
 function normalizeColumnName(name: string): string {
@@ -21,7 +29,7 @@ function getColumnValue(row: Record<string, unknown>, targetColumn: string): unk
   return undefined;
 }
 
-const SHEET_NAMES = {
+const DAILY_SHEETS = {
   expenses: 'الخزينه',
   loans: 'خزينه السلف',
   custody: 'العهد',
@@ -61,11 +69,11 @@ export function parseExcelFile(
   }
 
   const missingSheets: string[] = [];
-  const normalizedSheetNames = workbook.SheetNames.map(name => name.trim());
-  
-  for (const sheetName of Object.values(SHEET_NAMES)) {
+  const normalizedSheetNames = workbook.SheetNames.map((name) => name.trim());
+
+  for (const sheetName of Object.values(DAILY_SHEETS)) {
     const normalizedTargetName = sheetName.trim();
-    if (!normalizedSheetNames.some(name => name === normalizedTargetName)) {
+    if (!normalizedSheetNames.some((name) => name === normalizedTargetName)) {
       missingSheets.push(sheetName);
     }
   }
@@ -79,29 +87,29 @@ export function parseExcelFile(
     return { data: null, errors };
   }
 
-  const expensesResult = parseExpenseSheet(workbook, SHEET_NAMES.expenses, targetDate);
+  const expensesResult = parseExpenseSheet(workbook, DAILY_SHEETS.expenses, targetDate);
   if (expensesResult.missingColumns.length > 0) {
     errors.push({
       type: 'column',
-      message: `أعمدة مفقودة في صفحة "${SHEET_NAMES.expenses}"`,
+      message: `أعمدة مفقودة في صفحة "${DAILY_SHEETS.expenses}"`,
       details: expensesResult.missingColumns,
     });
   }
 
-  const loansResult = parseLoanSheet(workbook, SHEET_NAMES.loans, targetDate);
+  const loansResult = parseLoanSheet(workbook, DAILY_SHEETS.loans, targetDate);
   if (loansResult.missingColumns.length > 0) {
     errors.push({
       type: 'column',
-      message: `أعمدة مفقودة في صفحة "${SHEET_NAMES.loans}"`,
+      message: `أعمدة مفقودة في صفحة "${DAILY_SHEETS.loans}"`,
       details: loansResult.missingColumns,
     });
   }
 
-  const custodyResult = parseCustodySheet(workbook, SHEET_NAMES.custody, targetDate);
+  const custodyResult = parseCustodySheet(workbook, DAILY_SHEETS.custody, targetDate);
   if (custodyResult.missingColumns.length > 0) {
     errors.push({
       type: 'column',
-      message: `أعمدة مفقودة في صفحة "${SHEET_NAMES.custody}"`,
+      message: `أعمدة مفقودة في صفحة "${DAILY_SHEETS.custody}"`,
       details: custodyResult.missingColumns,
     });
   }
@@ -126,20 +134,28 @@ export function parseExcelFile(
 
   const totalOut = expensesTotal + loansOut + custodyOut;
 
+  const dailyData: DailyReportData = {
+    date: targetDate,
+    expenses: expensesResult.rows,
+    loans: loansResult.rows,
+    custody: custodyResult.rows,
+    totals: {
+      expensesTotal,
+      loansOut,
+      loansIn,
+      custodyOut,
+      custodyIn,
+      totalOut,
+    },
+  };
+
+  const reportSheetResult = parseReportSheet(workbook, targetDate);
+  errors.push(...reportSheetResult.errors);
+
   return {
     data: {
-      date: targetDate,
-      expenses: expensesResult.rows,
-      loans: loansResult.rows,
-      custody: custodyResult.rows,
-      totals: {
-        expensesTotal,
-        loansOut,
-        loansIn,
-        custodyOut,
-        custodyIn,
-        totalOut,
-      },
+      daily: dailyData,
+      report: reportSheetResult.data || undefined,
     },
     errors,
   };
@@ -155,7 +171,6 @@ function parseExpenseSheet(
   
   // Try reading from different starting rows to find the headers
   let jsonData: Record<string, unknown>[] = [];
-  let headers: string[] = [];
   let missingColumns: string[] = [];
   
   for (let startRow = 0; startRow <= 3; startRow++) {
@@ -171,9 +186,8 @@ function parseExpenseSheet(
         !normalizedHeaders.includes(normalizeColumnName(col))
       );
       
-      if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
+      if (missingColumns.length === 0 || tempMissing.length < missingColumns.length) {
         jsonData = tempData;
-        headers = tempHeaders;
         missingColumns = tempMissing;
         
         if (missingColumns.length === 0) break;
@@ -184,9 +198,10 @@ function parseExpenseSheet(
   const rows: ExpenseRow[] = [];
   for (const row of jsonData) {
     const dateValue = parseExcelDate(getColumnValue(row, 'التاريخ'));
-    if (dateValue === targetDate) {
+    const dateString = dateValue ? formatDateToYYYYMMDD(dateValue) : null;
+    if (dateString === targetDate) {
       rows.push({
-        التاريخ: dateValue,
+        التاريخ: dateString,
         البيان: String(getColumnValue(row, 'البيان') || ''),
         'اسم الشركه المنصرف لها': String(getColumnValue(row, 'اسم الشركه المنصرف لها') || ''),
         'اسم الموظف المنصرف له': String(getColumnValue(row, 'اسم الموظف المنصرف له') || ''),
@@ -194,7 +209,7 @@ function parseExpenseSheet(
         الفرع: String(getColumnValue(row, 'الفرع') || ''),
         'نوع المصروف': String(getColumnValue(row, 'نوع المصروف') || ''),
         'رقم الفاتورة': String(getColumnValue(row, 'رقم الفاتورة') || ''),
-        المنصرف: parseNumber(getColumnValue(row, 'المنصرف')),
+        المنصرف: parseNumber(getColumnValue(row, 'المنصرف')) ?? 0,
         ملاحظات: String(getColumnValue(row, 'ملاحظات') || ''),
       });
     }
@@ -213,7 +228,6 @@ function parseLoanSheet(
   
   // Try reading from different starting rows to find the headers
   let jsonData: Record<string, unknown>[] = [];
-  let headers: string[] = [];
   let missingColumns: string[] = [];
   
   for (let startRow = 0; startRow <= 3; startRow++) {
@@ -229,9 +243,8 @@ function parseLoanSheet(
         !normalizedHeaders.includes(normalizeColumnName(col))
       );
       
-      if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
+      if (missingColumns.length === 0 || tempMissing.length < missingColumns.length) {
         jsonData = tempData;
-        headers = tempHeaders;
         missingColumns = tempMissing;
         
         if (missingColumns.length === 0) break;
@@ -242,15 +255,16 @@ function parseLoanSheet(
   const rows: LoanRow[] = [];
   for (const row of jsonData) {
     const dateValue = parseExcelDate(getColumnValue(row, 'التاريخ'));
-    if (dateValue === targetDate) {
+    const dateString = dateValue ? formatDateToYYYYMMDD(dateValue) : null;
+    if (dateString === targetDate) {
       rows.push({
-        التاريخ: dateValue,
+        التاريخ: dateString,
         'اسم الموظف': String(getColumnValue(row, 'اسم الموظف') || ''),
         الكود: String(getColumnValue(row, 'الكود') || ''),
         القسم: String(getColumnValue(row, 'القسم') || ''),
         الفرع: String(getColumnValue(row, 'الفرع') || ''),
         'سلفه / سداد': String(getColumnValue(row, 'سلفه / سداد') || ''),
-        السلفه: parseNumber(getColumnValue(row, 'السلفه')),
+        السلفه: parseNumber(getColumnValue(row, 'السلفه')) ?? 0,
         'طريق السداد': String(getColumnValue(row, 'طريق السداد') || ''),
         ملاحظات: String(getColumnValue(row, 'ملاحظات') || ''),
       });
@@ -270,7 +284,6 @@ function parseCustodySheet(
   
   // Try reading from different starting rows to find the headers
   let jsonData: Record<string, unknown>[] = [];
-  let headers: string[] = [];
   let missingColumns: string[] = [];
   
   for (let startRow = 0; startRow <= 3; startRow++) {
@@ -286,9 +299,8 @@ function parseCustodySheet(
         !normalizedHeaders.includes(normalizeColumnName(col))
       );
       
-      if (tempMissing.length < missingColumns.length || missingColumns.length === 0) {
+      if (missingColumns.length === 0 || tempMissing.length < missingColumns.length) {
         jsonData = tempData;
-        headers = tempHeaders;
         missingColumns = tempMissing;
         
         if (missingColumns.length === 0) break;
@@ -299,9 +311,10 @@ function parseCustodySheet(
   const rows: CustodyRow[] = [];
   for (const row of jsonData) {
     const dateValue = parseExcelDate(getColumnValue(row, 'التاريخ'));
-    if (dateValue === targetDate) {
+    const dateString = dateValue ? formatDateToYYYYMMDD(dateValue) : null;
+    if (dateString === targetDate) {
       rows.push({
-        التاريخ: dateValue,
+        التاريخ: dateString,
         البيان: String(getColumnValue(row, 'البيان') || ''),
         'المنصرف اليه': String(getColumnValue(row, 'المنصرف اليه') || ''),
         القسم: String(getColumnValue(row, 'القسم') || ''),
@@ -310,7 +323,7 @@ function parseCustodySheet(
         'رقم الفاتورة / كود موظف': String(getColumnValue(row, 'رقم الفاتورة / كود موظف') || ''),
         'رقم إيصال الصرف/ استلام': String(getColumnValue(row, 'رقم إيصال الصرف/ استلام') || ''),
         'العهدة / سداد': String(getColumnValue(row, 'العهدة / سداد') || ''),
-        العهدة: parseNumber(getColumnValue(row, 'العهدة')),
+        العهدة: parseNumber(getColumnValue(row, 'العهدة')) ?? 0,
         ملاحظات: String(getColumnValue(row, 'ملاحظات') || ''),
       });
     }
