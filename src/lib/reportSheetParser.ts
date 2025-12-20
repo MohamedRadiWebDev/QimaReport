@@ -327,7 +327,9 @@ function extractReceivables(
   const errors: ValidationError[] = [];
   const headerNames = ['الشهر', 'العميل', 'المطلوب تحويله', 'المبلغ المسدد', 'المستحق', '14%'];
 
-  const headerResult = extractTableByHeaders(matrix, headerNames);
+  // The الإيرادات sheet typically has headers on row 3 (index 2). Try there first then fallback.
+  const headerResult =
+    extractTableByHeaders(matrix, headerNames, 2) || extractTableByHeaders(matrix, headerNames);
   if (!headerResult) {
     errors.push({
       type: 'table',
