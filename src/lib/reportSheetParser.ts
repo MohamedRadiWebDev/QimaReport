@@ -351,8 +351,17 @@ function extractReceivables(
 
   const rows: ReceivableRow[] = [];
 
+  let consecutiveEmptyRows = 0;
+
   for (const row of headerResult.rows) {
-    if (!row || isEmptyRow(row)) break;
+    if (!row || isEmptyRow(row)) {
+      consecutiveEmptyRows += 1;
+      if (consecutiveEmptyRows >= 3) break;
+      continue;
+    }
+
+    consecutiveEmptyRows = 0;
+
     if (isTotalRow(row)) break;
 
     const receivable = parseNumber(row[headerResult.colMap['المستحق']]) ?? 0;
