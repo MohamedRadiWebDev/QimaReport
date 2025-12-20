@@ -10,6 +10,7 @@ import LoansTable from '@/components/LoansTable';
 import CustodyTable from '@/components/CustodyTable';
 import WhatsAppMessage from '@/components/WhatsAppMessage';
 import ErrorDisplay from '@/components/ErrorDisplay';
+import ReportTab from '@/components/ReportTab';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -17,6 +18,7 @@ export default function Home() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'daily' | 'report'>('daily');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,6 +27,7 @@ export default function Home() {
       setFile(selectedFile);
       setReportData(null);
       setErrors([]);
+      setActiveTab('daily');
     }
   };
 
@@ -35,6 +38,7 @@ export default function Home() {
       setFile(droppedFile);
       setReportData(null);
       setErrors([]);
+      setActiveTab('daily');
     }
   };
 
@@ -51,6 +55,7 @@ export default function Home() {
     setLoading(true);
     setErrors([]);
     setReportData(null);
+    setActiveTab('daily');
 
     try {
       const buffer = await file.arrayBuffer();
@@ -157,26 +162,55 @@ export default function Home() {
 
       {reportData && (
         <>
-          <SummaryCards
-            expensesTotal={reportData.totals.expensesTotal}
-            loansOut={reportData.totals.loansOut}
-            loansIn={reportData.totals.loansIn}
-            custodyOut={reportData.totals.custodyOut}
-            custodyIn={reportData.totals.custodyIn}
-            totalOut={reportData.totals.totalOut}
-          />
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={() => setActiveTab('daily')}
+              className={`px-4 py-2 rounded-lg font-semibold border ${
+                activeTab === 'daily'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300'
+              }`}
+            >
+              التقرير اليومي
+            </button>
+            <button
+              onClick={() => setActiveTab('report')}
+              className={`px-4 py-2 rounded-lg font-semibold border ${
+                activeTab === 'report'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300'
+              }`}
+            >
+              Report
+            </button>
+          </div>
 
-          <WhatsAppMessage
-            date={reportData.date}
-            expensesTotal={reportData.totals.expensesTotal}
-            custodyOut={reportData.totals.custodyOut}
-            loansOut={reportData.totals.loansOut}
-            totalOut={reportData.totals.totalOut}
-          />
+          {activeTab === 'daily' ? (
+            <>
+              <SummaryCards
+                expensesTotal={reportData.daily.totals.expensesTotal}
+                loansOut={reportData.daily.totals.loansOut}
+                loansIn={reportData.daily.totals.loansIn}
+                custodyOut={reportData.daily.totals.custodyOut}
+                custodyIn={reportData.daily.totals.custodyIn}
+                totalOut={reportData.daily.totals.totalOut}
+              />
 
-          <ExpensesTable expenses={reportData.expenses} />
-          <CustodyTable custody={reportData.custody} />
-          <LoansTable loans={reportData.loans} />
+              <WhatsAppMessage
+                date={reportData.daily.date}
+                expensesTotal={reportData.daily.totals.expensesTotal}
+                custodyOut={reportData.daily.totals.custodyOut}
+                loansOut={reportData.daily.totals.loansOut}
+                totalOut={reportData.daily.totals.totalOut}
+              />
+
+              <ExpensesTable expenses={reportData.daily.expenses} />
+              <CustodyTable custody={reportData.daily.custody} />
+              <LoansTable loans={reportData.daily.loans} />
+            </>
+          ) : (
+            <ReportTab report={reportData.report} selectedDate={selectedDate} />
+          )}
         </>
       )}
     </main>
