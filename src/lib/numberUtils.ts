@@ -25,8 +25,13 @@ export function parseNumber(value: unknown): number | null {
   }
 
   if (typeof value === 'string') {
-    const normalized = normalizeDigits(value);
-    const cleaned = normalized.replace(/,/g, '').replace(/\s/g, '').trim();
+    const normalized = normalizeDigits(value)
+      .replace(/٬/g, ',')
+      .replace(/٫/g, '.');
+    const cleaned = normalized
+      .replace(/,/g, '')
+      .replace(/\s/g, '')
+      .trim();
 
     if (cleaned === '') return null;
 
