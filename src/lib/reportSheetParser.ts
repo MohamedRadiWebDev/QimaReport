@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { formatDateToYYYYMMDD, parseExcelDate } from './dateUtils';
-import { parseNumber } from './numberUtils';
+import { normalizeDigits, parseNumber } from './numberUtils';
 import {
   BasicBalances,
   MonthlyExpenseLine,
@@ -420,9 +420,122 @@ function extractReceivables(
   };
 }
 
+function parseMonthYearString(
+  value: string | number | null
+): { label: string; key: string; year: number | null; monthNumber: number | null } | null {
+  if (value === null || value === undefined) return null;
+
+  const raw = normalizeDigits(String(value)).trim();
+  if (!raw) return null;
+
+  const englishMonths: Record<string, number> = {
+    jan: 1,
+    january: 1,
+    feb: 2,
+    february: 2,
+    mar: 3,
+    march: 3,
+    apr: 4,
+    april: 4,
+    may: 5,
+    jun: 6,
+    june: 6,
+    jul: 7,
+    july: 7,
+    aug: 8,
+    august: 8,
+    sep: 9,
+    sept: 9,
+    september: 9,
+    oct: 10,
+    october: 10,
+    nov: 11,
+    november: 11,
+    dec: 12,
+    december: 12,
+  };
+
+  const arabicMonths: Record<string, number> = {
+    'يناير': 1,
+    'فبراير': 2,
+    'مارس': 3,
+    'ابريل': 4,
+    'أبريل': 4,
+    'أبريل ': 4,
+    'ابريل ': 4,
+    'ابريل‏': 4,
+    'أبريل‏': 4,
+    'مايو': 5,
+    'يونيو': 6,
+    'يونيه': 6,
+    'يوليو': 7,
+    'يوليه': 7,
+    'اغسطس': 8,
+    'أغسطس': 8,
+    'سبتمبر': 9,
+    'اكتوبر': 10,
+    'أكتوبر': 10,
+    'نوفمبر': 11,
+    'ديسمبر': 12,
+  };
+
+  const normalized = raw.toLowerCase();
+  const englishMatch = normalized.match(
+    /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s\-\/]+(\d{2,4})$/
+  );
+
+  if (englishMatch) {
+    const monthNumber = englishMonths[englishMatch[1] as keyof typeof englishMonths];
+    const year = normalizeYear(englishMatch[2]);
+    const label = new Date(Date.UTC(year, monthNumber - 1, 1)).toLocaleString('ar-EG', {
+      month: 'long',
+    });
+    const key = `${year}-${String(monthNumber).padStart(2, '0')}`;
+    return { label, key, year, monthNumber };
+  }
+
+  const cleanedArabic = normalized.replace(/[إأآ]/g, 'ا');
+  const arabicParts = cleanedArabic.split(/[\s\-\/]+/).filter(Boolean);
+  if (arabicParts.length >= 1) {
+    const monthName = arabicParts[0];
+    const monthNumber = arabicMonths[monthName];
+    if (monthNumber) {
+      const yearPart = arabicParts[1];
+      if (yearPart) {
+        const year = normalizeYear(yearPart);
+        const label = new Date(Date.UTC(year, monthNumber - 1, 1)).toLocaleString('ar-EG', {
+          month: 'long',
+        });
+        const key = `${year}-${String(monthNumber).padStart(2, '0')}`;
+        return { label, key, year, monthNumber };
+      }
+
+      const label = new Date(Date.UTC(2000, monthNumber - 1, 1)).toLocaleString('ar-EG', {
+        month: 'long',
+      });
+      return { label, key: label, year: null, monthNumber };
+    }
+  }
+
+  return null;
+}
+
+function normalizeYear(value: string): number {
+  const yearNum = parseInt(value, 10);
+  if (value.length === 2) {
+    return yearNum >= 50 ? 1900 + yearNum : 2000 + yearNum;
+  }
+  return yearNum;
+}
+
 function formatMonthCell(
   value: string | number | null
 ): { label: string; key: string; year: number | null; monthNumber: number | null } {
+  const monthFromPattern = parseMonthYearString(value);
+  if (monthFromPattern) {
+    return monthFromPattern;
+  }
+
   const parsedDate = parseExcelDate(value);
   if (parsedDate) {
     const monthNumber = parsedDate.getUTCMonth() + 1;
