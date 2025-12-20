@@ -172,8 +172,10 @@ export function parseReportSheet(
   if (!revenueSheetName) {
     errors.push({ type: 'sheet', message: 'شيت الإيرادات غير موجود' });
   } else {
+    console.log('[receivables] using sheet:', revenueSheetName);
     const revenueSheet = workbook.Sheets[revenueSheetName];
     const revenueMatrix = sheetToMatrix(revenueSheet);
+    console.log('[receivables] sheet dimensions:', revenueMatrix.length, 'rows x', revenueMatrix[0]?.length || 0, 'cols');
     const receivablesResult = extractReceivables(revenueMatrix);
     baseData.receivables = receivablesResult.data;
     errors.push(...receivablesResult.errors);
@@ -328,6 +330,11 @@ function extractReceivables(
   const headerNames = ['الشهر', 'العميل', 'المطلوب تحويله', 'المبلغ المسدد', 'المستحق', '14%'];
 
   const headerCandidates = findReceivablesHeaderCandidates(matrix, headerNames, [2, 0]);
+  console.log('[receivables] header candidates found:', headerCandidates.map((c) => ({
+    headerRow: c.headerRow,
+    columns: Object.keys(c.colMap),
+    rowsBelow: c.rows.length,
+  })));
   if (headerCandidates.length === 0) {
     errors.push({
       type: 'table',
@@ -360,6 +367,7 @@ function extractReceivables(
   );
 
   const rows = best.rows;
+  console.log('[receivables] chosen header row:', best.header.headerRow, 'rows parsed:', rows.length);
 
   const totals = rows.reduce(
     (acc, row) => {
@@ -472,6 +480,17 @@ function parseReceivableRows(headerResult: {
         tax14,
       });
     }
+  }
+
+  if (rows.length > 0) {
+    const sample = rows.slice(0, 3).map((row) => ({
+      month: row.monthLabel,
+      customer: row.customer,
+      receivable: row.receivable,
+    }));
+    console.log('[receivables] parsed sample rows:', sample);
+  } else {
+    console.log('[receivables] no rows parsed from header row', headerResult.headerRow);
   }
 
   return rows;
