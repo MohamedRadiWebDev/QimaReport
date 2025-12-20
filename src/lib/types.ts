@@ -37,7 +37,7 @@ export interface CustodyRow {
   ملاحظات: string;
 }
 
-export interface ReportData {
+export interface DailyReportData {
   date: string;
   expenses: ExpenseRow[];
   loans: LoanRow[];
@@ -52,8 +52,77 @@ export interface ReportData {
   };
 }
 
+export interface BasicBalances {
+  bankBalance: number | null;
+  safeBalance: number | null;
+  totalSolf: number | null;
+  totalOhda: number | null;
+}
+
+export interface MonthlyExpenseLine {
+  name: string;
+  amount: number;
+  paid: number;
+  remaining: number;
+  notes: string;
+}
+
+export interface MonthlyExpensesData {
+  lines: MonthlyExpenseLine[];
+  totals: {
+    amount: number;
+    paid: number;
+    remaining: number;
+  };
+  missingHeaders: string[];
+  found: boolean;
+}
+
+export interface ReceivableRow {
+  monthLabel: string;
+  monthKey: string;
+  year: number | null;
+  monthNumber: number | null;
+  customer: string;
+  toTransfer: number;
+  paid: number;
+  receivable: number;
+  tax14: number | null;
+}
+
+export interface CustomerReceivableSummary {
+  customer: string;
+  receivable: number;
+}
+
+export interface ReceivablesData {
+  rows: ReceivableRow[];
+  totals: {
+    receivablesTotal: number;
+    toTransferTotal: number;
+    paidTotal: number;
+    tax14Total: number;
+  };
+  customerSummary: CustomerReceivableSummary[];
+  missingHeaders: string[];
+  found: boolean;
+}
+
+export interface ReportSheetData {
+  reportDate: string | null;
+  dateWarning: boolean;
+  kpis: BasicBalances;
+  monthlyExpenses: MonthlyExpensesData;
+  receivables: ReceivablesData;
+}
+
+export interface ReportData {
+  daily: DailyReportData;
+  report?: ReportSheetData;
+}
+
 export interface ValidationError {
-  type: 'file' | 'sheet' | 'column';
+  type: 'file' | 'sheet' | 'column' | 'table';
   message: string;
   details?: string[];
 }
