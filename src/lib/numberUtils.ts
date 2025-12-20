@@ -28,14 +28,23 @@ export function parseNumber(value: unknown): number | null {
     const normalized = normalizeDigits(value)
       .replace(/٬/g, ',')
       .replace(/٫/g, '.');
-    const cleaned = normalized
+
+    let sign = 1;
+    let trimmed = normalized.trim();
+
+    if (/^\(.*\)$/.test(trimmed)) {
+      sign = -1;
+      trimmed = trimmed.slice(1, -1);
+    }
+
+    const cleaned = trimmed
       .replace(/,/g, '')
       .replace(/\s/g, '')
       .trim();
 
     if (cleaned === '') return null;
 
-    const parsed = parseFloat(cleaned);
+    const parsed = parseFloat(cleaned) * sign;
     return isNaN(parsed) ? null : parsed;
   }
 

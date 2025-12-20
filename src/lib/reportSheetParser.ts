@@ -452,6 +452,7 @@ function parseReceivableRows(headerResult: {
 }): ReceivableRow[] {
   const rows: ReceivableRow[] = [];
   let consecutiveEmptyRows = 0;
+  let inspected = 0;
 
   for (const row of headerResult.rows) {
     if (!row || isEmptyRow(row)) {
@@ -471,6 +472,18 @@ function parseReceivableRows(headerResult: {
     const customer = String(row[headerResult.colMap['العميل']] ?? '').trim();
     const tax14Index = headerResult.colMap['14%'];
     const tax14 = tax14Index !== undefined ? parseNumber(row[tax14Index]) ?? 0 : 0;
+
+    if (inspected < 8) {
+      console.log('[receivables] row probe', {
+        monthRaw: row[headerResult.colMap['الشهر']],
+        customer,
+        receivableRaw: row[headerResult.colMap['المستحق']],
+        receivableParsed: receivable,
+        toTransferParsed: toTransfer,
+        paidParsed: paid,
+      });
+      inspected += 1;
+    }
 
     if (receivable > 1) {
       rows.push({
