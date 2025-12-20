@@ -1,36 +1,38 @@
-export function parseExcelDate(value: unknown): string | null {
+import { normalizeDigits } from './numberUtils';
+
+export function parseExcelDate(value: unknown): Date | null {
   if (value === null || value === undefined || value === '') {
     return null;
   }
 
   if (typeof value === 'number') {
-    const date = excelSerialToDate(value);
-    return formatDateToYYYYMMDD(date);
+    return excelSerialToDate(value);
   }
 
   if (typeof value === 'string') {
-    const trimmed = value.trim();
-    
-    const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    const normalized = normalizeDigits(value).trim();
+
+    const ddmmyyyyMatch = normalized.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (ddmmyyyyMatch) {
-      const day = ddmmyyyyMatch[1].padStart(2, '0');
-      const month = ddmmyyyyMatch[2].padStart(2, '0');
-      const year = ddmmyyyyMatch[3];
-      return `${year}-${month}-${day}`;
+      const day = parseInt(ddmmyyyyMatch[1], 10);
+      const month = parseInt(ddmmyyyyMatch[2], 10) - 1;
+      const year = parseInt(ddmmyyyyMatch[3], 10);
+      const date = new Date(Date.UTC(year, month, day));
+      return isNaN(date.getTime()) ? null : date;
     }
 
-    const yyyymmddMatch = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    const yyyymmddMatch = normalized.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (yyyymmddMatch) {
-      const year = yyyymmddMatch[1];
-      const month = yyyymmddMatch[2].padStart(2, '0');
-      const day = yyyymmddMatch[3].padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      const year = parseInt(yyyymmddMatch[1], 10);
+      const month = parseInt(yyyymmddMatch[2], 10) - 1;
+      const day = parseInt(yyyymmddMatch[3], 10);
+      const date = new Date(Date.UTC(year, month, day));
+      return isNaN(date.getTime()) ? null : date;
     }
-
   }
 
   if (value instanceof Date && !isNaN(value.getTime())) {
-    return formatDateToYYYYMMDD(value);
+    return value;
   }
 
   return null;
@@ -47,7 +49,7 @@ function excelSerialToDate(serial: number): Date {
   return new Date(utcMs);
 }
 
-function formatDateToYYYYMMDD(date: Date): string {
+export function formatDateToYYYYMMDD(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
