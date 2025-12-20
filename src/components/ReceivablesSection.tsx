@@ -42,7 +42,7 @@ export default function ReceivablesSection({ data }: ReceivablesSectionProps) {
       <div className="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
         <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">جدول المستحقات</h2>
         {data.rows.length === 0 ? (
-          <p className="text-gray-500">لا توجد مستحقات (المستحق = 0)</p>
+          <p className="text-gray-500">لا توجد مستحقات أكبر من جنيه واحد</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-100">

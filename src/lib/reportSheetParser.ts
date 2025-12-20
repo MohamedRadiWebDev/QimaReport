@@ -358,12 +358,12 @@ function extractReceivables(
     const receivable = parseNumber(row[headerResult.colMap['المستحق']]) ?? 0;
     const toTransfer = parseNumber(row[headerResult.colMap['المطلوب تحويله']]) ?? 0;
     const paid = parseNumber(row[headerResult.colMap['المبلغ المسدد']]) ?? 0;
-    const month = String(row[headerResult.colMap['الشهر']] ?? '').trim();
+    const month = formatMonthCell(row[headerResult.colMap['الشهر']]);
     const customer = String(row[headerResult.colMap['العميل']] ?? '').trim();
     const tax14Index = headerResult.colMap['14%'];
     const tax14 = tax14Index !== undefined ? parseNumber(row[tax14Index]) ?? 0 : 0;
 
-    if (receivable !== 0) {
+    if (receivable > 1) {
       rows.push({
         month,
         customer,
@@ -406,4 +406,20 @@ function extractReceivables(
     },
     errors,
   };
+}
+
+function formatMonthCell(value: string | number | null): string {
+  const parsedDate = parseExcelDate(value);
+  if (parsedDate) {
+    return parsedDate.toLocaleString('ar-EG', { month: 'long' });
+  }
+
+  if (typeof value === 'string') {
+    const tryDate = new Date(value);
+    if (!isNaN(tryDate.getTime())) {
+      return tryDate.toLocaleString('ar-EG', { month: 'long' });
+    }
+  }
+
+  return String(value ?? '').trim();
 }
