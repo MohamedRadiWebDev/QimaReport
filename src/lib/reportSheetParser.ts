@@ -112,44 +112,75 @@ export function extractTableByHeaders(
 export function parseReportSheet(
   workbook: XLSX.WorkBook,
   targetDate: string
-): { data: ReportSheetData | null; errors: ValidationError[] } {
+): { data: ReportSheetData; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
-  const sheetName = workbook.SheetNames.find(
+  const reportSheetName = workbook.SheetNames.find(
     (name) => name.trim().toLowerCase() === 'report'
   );
 
-  if (!sheetName) {
-    errors.push({ type: 'sheet', message: 'شيت report غير موجود' });
-    return { data: null, errors };
-  }
+  const revenueSheetName = workbook.SheetNames.find((name) => {
+    const normalized = name.trim().toLowerCase();
+    return normalized === 'الايرادات' || normalized === 'الإيرادات';
+  });
 
-  const sheet = workbook.Sheets[sheetName];
-  const matrix = sheetToMatrix(sheet);
-
-  const reportDate = detectReportDate(matrix);
-  const dateWarning = Boolean(reportDate && reportDate !== targetDate);
-
-  const kpis: BasicBalances = {
-    bankBalance: extractKpi(matrix, ['رصيد البنك']),
-    safeBalance: extractKpi(matrix, ['رصيد الخزينه', 'رصيد الخزينة']),
-    totalSolf: extractKpi(matrix, ['اجمالي السلف']),
-    totalOhda: extractKpi(matrix, ['اجمالي العهد']),
+  const baseData: ReportSheetData = {
+    reportDate: null,
+    dateWarning: false,
+    kpis: {
+      bankBalance: null,
+      safeBalance: null,
+      totalSolf: null,
+      totalOhda: null,
+    },
+    monthlyExpenses: {
+      lines: [],
+      totals: { amount: 0, paid: 0, remaining: 0 },
+      missingHeaders: [],
+      found: false,
+    },
+    receivables: {
+      rows: [],
+      totals: { receivablesTotal: 0, toTransferTotal: 0, paidTotal: 0, tax14Total: 0 },
+      customerSummary: [],
+      missingHeaders: [],
+      found: false,
+    },
   };
 
-  const monthlyExpensesResult = extractMonthlyExpenses(matrix);
-  errors.push(...monthlyExpensesResult.errors);
+  if (!reportSheetName) {
+    errors.push({ type: 'sheet', message: 'شيت report غير موجود' });
+  } else {
+    const sheet = workbook.Sheets[reportSheetName];
+    const matrix = sheetToMatrix(sheet);
 
-  const receivablesResult = extractReceivables(matrix);
-  errors.push(...receivablesResult.errors);
+    const reportDate = detectReportDate(matrix);
+    baseData.reportDate = reportDate;
+    baseData.dateWarning = Boolean(reportDate && reportDate !== targetDate);
+
+    baseData.kpis = {
+      bankBalance: extractKpi(matrix, ['رصيد البنك']),
+      safeBalance: extractKpi(matrix, ['رصيد الخزينه', 'رصيد الخزينة']),
+      totalSolf: extractKpi(matrix, ['اجمالي السلف']),
+      totalOhda: extractKpi(matrix, ['اجمالي العهد']),
+    };
+
+    const monthlyExpensesResult = extractMonthlyExpenses(matrix);
+    baseData.monthlyExpenses = monthlyExpensesResult.data;
+    errors.push(...monthlyExpensesResult.errors);
+  }
+
+  if (!revenueSheetName) {
+    errors.push({ type: 'sheet', message: 'شيت الإيرادات غير موجود' });
+  } else {
+    const revenueSheet = workbook.Sheets[revenueSheetName];
+    const revenueMatrix = sheetToMatrix(revenueSheet);
+    const receivablesResult = extractReceivables(revenueMatrix);
+    baseData.receivables = receivablesResult.data;
+    errors.push(...receivablesResult.errors);
+  }
 
   return {
-    data: {
-      reportDate,
-      dateWarning,
-      kpis,
-      monthlyExpenses: monthlyExpensesResult.data,
-      receivables: receivablesResult.data,
-    },
+    data: baseData,
     errors,
   };
 }
