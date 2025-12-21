@@ -79,7 +79,10 @@ export interface MonthlyExpensesData {
 }
 
 export interface ReceivableRow {
-  month: string;
+  monthLabel: string;
+  monthKey: string;
+  year: number | null;
+  monthNumber: number | null;
   customer: string;
   toTransfer: number;
   paid: number;

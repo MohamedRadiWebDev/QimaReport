@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { formatDateToYYYYMMDD, parseExcelDate } from './dateUtils';
-import { parseNumber } from './numberUtils';
+import { normalizeDigits, parseNumber } from './numberUtils';
 import {
   BasicBalances,
   MonthlyExpenseLine,
@@ -77,23 +77,30 @@ export function findNearestNumber(
   return nearest;
 }
 
+function normalizeHeaderText(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return normalizeDigits(String(value))
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 export function extractTableByHeaders(
   matrix: (string | number | null)[][],
   headerNames: string[],
   startRow = 0
 ): { headerRow: number; colMap: Record<string, number>; rows: (string | number | null)[][] } | null {
-  const normalizedHeaders = headerNames.map((h) => h.trim());
+  const normalizedHeaders = headerNames.map((h) => normalizeHeaderText(h));
 
   for (let r = startRow; r < matrix.length; r++) {
     const row = matrix[r] || [];
     const colMap: Record<string, number> = {};
 
-    normalizedHeaders.forEach((header) => {
-      const idx = row.findIndex(
-        (cell) => typeof cell === 'string' && cell.trim() === header
-      );
+    normalizedHeaders.forEach((header, headerIdx) => {
+      const idx = row.findIndex((cell) => normalizeHeaderText(cell) === header);
       if (idx !== -1) {
-        colMap[header] = idx;
+        colMap[headerNames[headerIdx]] = idx;
       }
     });
 
@@ -172,8 +179,10 @@ export function parseReportSheet(
   if (!revenueSheetName) {
     errors.push({ type: 'sheet', message: 'شيت الإيرادات غير موجود' });
   } else {
+    console.log('[receivables] using sheet:', revenueSheetName);
     const revenueSheet = workbook.Sheets[revenueSheetName];
     const revenueMatrix = sheetToMatrix(revenueSheet);
+    console.log('[receivables] sheet dimensions:', revenueMatrix.length, 'rows x', revenueMatrix[0]?.length || 0, 'cols');
     const receivablesResult = extractReceivables(revenueMatrix);
     baseData.receivables = receivablesResult.data;
     errors.push(...receivablesResult.errors);
@@ -327,10 +336,13 @@ function extractReceivables(
   const errors: ValidationError[] = [];
   const headerNames = ['الشهر', 'العميل', 'المطلوب تحويله', 'المبلغ المسدد', 'المستحق', '14%'];
 
-  // The الإيرادات sheet typically has headers on row 3 (index 2). Try there first then fallback.
-  const headerResult =
-    extractTableByHeaders(matrix, headerNames, 2) || extractTableByHeaders(matrix, headerNames);
-  if (!headerResult) {
+  const headerCandidates = findReceivablesHeaderCandidates(matrix, headerNames, [2, 0]);
+  console.log('[receivables] header candidates found:', headerCandidates.map((c) => ({
+    headerRow: c.headerRow,
+    columns: Object.keys(c.colMap),
+    rowsBelow: c.rows.length,
+  })));
+  if (headerCandidates.length === 0) {
     errors.push({
       type: 'table',
       message: 'تعذر العثور على جدول الإيرادات والمستحقات',
@@ -349,31 +361,20 @@ function extractReceivables(
     };
   }
 
-  const rows: ReceivableRow[] = [];
+  const parsedCandidates = headerCandidates.map((candidate) => ({
+    header: candidate,
+    rows: parseReceivableRows(candidate),
+  }));
 
-  for (const row of headerResult.rows) {
-    if (!row || isEmptyRow(row)) break;
-    if (isTotalRow(row)) break;
+  const best = parsedCandidates.reduce(
+    (acc, curr) => {
+      return curr.rows.length > acc.rows.length ? curr : acc;
+    },
+    parsedCandidates[0]
+  );
 
-    const receivable = parseNumber(row[headerResult.colMap['المستحق']]) ?? 0;
-    const toTransfer = parseNumber(row[headerResult.colMap['المطلوب تحويله']]) ?? 0;
-    const paid = parseNumber(row[headerResult.colMap['المبلغ المسدد']]) ?? 0;
-    const month = formatMonthCell(row[headerResult.colMap['الشهر']]);
-    const customer = String(row[headerResult.colMap['العميل']] ?? '').trim();
-    const tax14Index = headerResult.colMap['14%'];
-    const tax14 = tax14Index !== undefined ? parseNumber(row[tax14Index]) ?? 0 : 0;
-
-    if (receivable > 1) {
-      rows.push({
-        month,
-        customer,
-        toTransfer,
-        paid,
-        receivable,
-        tax14,
-      });
-    }
-  }
+  const rows = best.rows;
+  console.log('[receivables] chosen header row:', best.header.headerRow, 'rows parsed:', rows.length);
 
   const totals = rows.reduce(
     (acc, row) => {
@@ -408,18 +409,251 @@ function extractReceivables(
   };
 }
 
-function formatMonthCell(value: string | number | null): string {
+function findReceivablesHeaderCandidates(
+  matrix: (string | number | null)[][],
+  headerNames: string[],
+  preferredStarts: number[]
+): { headerRow: number; colMap: Record<string, number>; rows: (string | number | null)[][] }[] {
+  const normalizedHeaders = headerNames.map((h) => normalizeHeaderText(h));
+  const candidates: {
+    headerRow: number;
+    colMap: Record<string, number>;
+    rows: (string | number | null)[][];
+  }[] = [];
+  const seenRows = new Set<number>();
+
+  for (const startRow of preferredStarts) {
+    for (let r = startRow; r < matrix.length; r++) {
+      if (seenRows.has(r)) continue;
+      const row = matrix[r] || [];
+      const colMap: Record<string, number> = {};
+
+      normalizedHeaders.forEach((header, headerIdx) => {
+        const idx = row.findIndex((cell) => normalizeHeaderText(cell) === header);
+        if (idx !== -1) {
+          colMap[headerNames[headerIdx]] = idx;
+        }
+      });
+
+      if (Object.keys(colMap).length === normalizedHeaders.length) {
+        candidates.push({ headerRow: r, colMap, rows: matrix.slice(r + 1) });
+        seenRows.add(r);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function parseReceivableRows(headerResult: {
+  headerRow: number;
+  colMap: Record<string, number>;
+  rows: (string | number | null)[][];
+}): ReceivableRow[] {
+  const rows: ReceivableRow[] = [];
+  let consecutiveEmptyRows = 0;
+  let inspected = 0;
+
+  for (const row of headerResult.rows) {
+    if (!row || isEmptyRow(row)) {
+      consecutiveEmptyRows += 1;
+      if (consecutiveEmptyRows >= 3) break;
+      continue;
+    }
+
+    consecutiveEmptyRows = 0;
+
+    if (isTotalRow(row)) break;
+
+    const receivable = parseNumber(row[headerResult.colMap['المستحق']]) ?? 0;
+    const toTransfer = parseNumber(row[headerResult.colMap['المطلوب تحويله']]) ?? 0;
+    const paid = parseNumber(row[headerResult.colMap['المبلغ المسدد']]) ?? 0;
+    const monthInfo = formatMonthCell(row[headerResult.colMap['الشهر']]);
+    const customer = String(row[headerResult.colMap['العميل']] ?? '').trim();
+    const tax14Index = headerResult.colMap['14%'];
+    const tax14 = tax14Index !== undefined ? parseNumber(row[tax14Index]) ?? 0 : 0;
+
+    if (inspected < 8) {
+      console.log('[receivables] row probe', {
+        monthRaw: row[headerResult.colMap['الشهر']],
+        customer,
+        receivableRaw: row[headerResult.colMap['المستحق']],
+        receivableParsed: receivable,
+        toTransferParsed: toTransfer,
+        paidParsed: paid,
+      });
+      inspected += 1;
+    }
+
+    if (receivable > 1) {
+      rows.push({
+        monthLabel: monthInfo.label,
+        monthKey: monthInfo.key,
+        year: monthInfo.year,
+        monthNumber: monthInfo.monthNumber,
+        customer,
+        toTransfer,
+        paid,
+        receivable,
+        tax14,
+      });
+    }
+  }
+
+  if (rows.length === 0) {
+    console.log('[receivables] no rows parsed from header row', headerResult.headerRow);
+  }
+
+  return rows;
+}
+
+function parseMonthYearString(
+  value: string | number | null
+): { label: string; key: string; year: number | null; monthNumber: number | null } | null {
+  if (value === null || value === undefined) return null;
+
+  const raw = normalizeDigits(String(value)).trim();
+  if (!raw) return null;
+
+  const englishMonths: Record<string, number> = {
+    jan: 1,
+    january: 1,
+    feb: 2,
+    february: 2,
+    mar: 3,
+    march: 3,
+    apr: 4,
+    april: 4,
+    may: 5,
+    jun: 6,
+    june: 6,
+    jul: 7,
+    july: 7,
+    aug: 8,
+    august: 8,
+    sep: 9,
+    sept: 9,
+    september: 9,
+    oct: 10,
+    october: 10,
+    nov: 11,
+    november: 11,
+    dec: 12,
+    december: 12,
+  };
+
+  const arabicMonths: Record<string, number> = {
+    'يناير': 1,
+    'فبراير': 2,
+    'مارس': 3,
+    'ابريل': 4,
+    'أبريل': 4,
+    'أبريل ': 4,
+    'ابريل ': 4,
+    'ابريل‏': 4,
+    'أبريل‏': 4,
+    'مايو': 5,
+    'يونيو': 6,
+    'يونيه': 6,
+    'يوليو': 7,
+    'يوليه': 7,
+    'اغسطس': 8,
+    'أغسطس': 8,
+    'سبتمبر': 9,
+    'اكتوبر': 10,
+    'أكتوبر': 10,
+    'نوفمبر': 11,
+    'ديسمبر': 12,
+  };
+
+  const normalized = raw.toLowerCase();
+  const englishMatch = normalized.match(
+    /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s\-\/]+(\d{2,4})$/
+  );
+
+  if (englishMatch) {
+    const monthNumber = englishMonths[englishMatch[1] as keyof typeof englishMonths];
+    const year = normalizeYear(englishMatch[2]);
+    const label = new Date(Date.UTC(year, monthNumber - 1, 1)).toLocaleString('ar-EG', {
+      month: 'long',
+    });
+    const key = `${year}-${String(monthNumber).padStart(2, '0')}`;
+    return { label, key, year, monthNumber };
+  }
+
+  const cleanedArabic = normalized.replace(/[إأآ]/g, 'ا');
+  const arabicParts = cleanedArabic.split(/[\s\-\/]+/).filter(Boolean);
+  if (arabicParts.length >= 1) {
+    const monthName = arabicParts[0];
+    const monthNumber = arabicMonths[monthName];
+    if (monthNumber) {
+      const yearPart = arabicParts[1];
+      if (yearPart) {
+        const year = normalizeYear(yearPart);
+        const label = new Date(Date.UTC(year, monthNumber - 1, 1)).toLocaleString('ar-EG', {
+          month: 'long',
+        });
+        const key = `${year}-${String(monthNumber).padStart(2, '0')}`;
+        return { label, key, year, monthNumber };
+      }
+
+      const label = new Date(Date.UTC(2000, monthNumber - 1, 1)).toLocaleString('ar-EG', {
+        month: 'long',
+      });
+      return { label, key: label, year: null, monthNumber };
+    }
+  }
+
+  return null;
+}
+
+function normalizeYear(value: string): number {
+  const yearNum = parseInt(value, 10);
+  if (value.length === 2) {
+    return yearNum >= 50 ? 1900 + yearNum : 2000 + yearNum;
+  }
+  return yearNum;
+}
+
+function formatMonthCell(
+  value: string | number | null
+): { label: string; key: string; year: number | null; monthNumber: number | null } {
+  const monthFromPattern = parseMonthYearString(value);
+  if (monthFromPattern) {
+    return monthFromPattern;
+  }
+
   const parsedDate = parseExcelDate(value);
   if (parsedDate) {
-    return parsedDate.toLocaleString('ar-EG', { month: 'long' });
+    const monthNumber = parsedDate.getUTCMonth() + 1;
+    const year = parsedDate.getUTCFullYear();
+    return {
+      label: parsedDate.toLocaleString('ar-EG', { month: 'long' }),
+      key: `${year}-${String(monthNumber).padStart(2, '0')}`,
+      year,
+      monthNumber,
+    };
   }
 
   if (typeof value === 'string') {
     const tryDate = new Date(value);
     if (!isNaN(tryDate.getTime())) {
-      return tryDate.toLocaleString('ar-EG', { month: 'long' });
+      const monthNumber = tryDate.getMonth() + 1;
+      const year = tryDate.getFullYear();
+      return {
+        label: tryDate.toLocaleString('ar-EG', { month: 'long' }),
+        key: `${year}-${String(monthNumber).padStart(2, '0')}`,
+        year,
+        monthNumber,
+      };
     }
   }
 
-  return String(value ?? '').trim();
+  const fallback = String(value ?? '').trim();
+  return {
+    label: fallback || 'غير محدد',
+    key: fallback || 'غير محدد',
+    year: null,
+    monthNumber: null,
+  };
 }
