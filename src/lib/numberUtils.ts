@@ -25,12 +25,26 @@ export function parseNumber(value: unknown): number | null {
   }
 
   if (typeof value === 'string') {
-    const normalized = normalizeDigits(value);
-    const cleaned = normalized.replace(/,/g, '').replace(/\s/g, '').trim();
+    const normalized = normalizeDigits(value)
+      .replace(/٬/g, ',')
+      .replace(/٫/g, '.');
+
+    let sign = 1;
+    let trimmed = normalized.trim();
+
+    if (/^\(.*\)$/.test(trimmed)) {
+      sign = -1;
+      trimmed = trimmed.slice(1, -1);
+    }
+
+    const cleaned = trimmed
+      .replace(/,/g, '')
+      .replace(/\s/g, '')
+      .trim();
 
     if (cleaned === '') return null;
 
-    const parsed = parseFloat(cleaned);
+    const parsed = parseFloat(cleaned) * sign;
     return isNaN(parsed) ? null : parsed;
   }
 
